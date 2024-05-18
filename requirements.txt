@@ -1,0 +1,6 @@
+yfinance
+pandas
+numpy
+re
+colorama
+scipy.stats
