@@ -5,32 +5,62 @@ import re
 from colorama import Fore, Style, init
 import scipy.stats
 
+# comment code
+
 def print_banner():
-    #https://patorjk.com/software/taag/#p=display&f=Big&t=RiskRanger%20v2.1
+    # https://patorjk.com/software/taag/#p=display&f=Big&t=RiskRanger%20v2.2
     banner_text = r"""
-  _____  _     _    _____                                    ___   __ 
- |  __ \(_)   | |  |  __ \                                  |__ \ /_ |
- | |__) |_ ___| | _| |__) |__ _ _ __   __ _  ___ _ __  __   __ ) | | |
- |  _  /| / __| |/ /  _  // _` | '_ \ / _` |/ _ \ '__| \ \ / // /  | |
- | | \ \| \__ \   <| | \ \ (_| | | | | (_| |  __/ |     \ V // /_ _| |
- |_|  \_\_|___/_|\_\_|  \_\__,_|_| |_|\__, |\___|_|      \_/|____(_)_|
-                                       __/ |                          
-                                      |___/                           
+  _____  _     _    _____                                    ___    ___  
+ |  __ \(_)   | |  |  __ \                                  |__ \  |__ \ 
+ | |__) |_ ___| | _| |__) |__ _ _ __   __ _  ___ _ __  __   __ ) |    ) |
+ |  _  /| / __| |/ /  _  // _` | '_ \ / _` |/ _ \ '__| \ \ / // /    / / 
+ | | \ \| \__ \   <| | \ \ (_| | | | | (_| |  __/ |     \ V // /_ _ / /_ 
+ |_|  \_\_|___/_|\_\_|  \_\__,_|_| |_|\__, |\___|_|      \_/|____(_)____|
+                                       __/ |                             
+                                      |___/                                                    
     """
     print(Fore.WHITE + banner_text + Style.RESET_ALL)
 
-def get_valid_data(ticker):
+def get_approximate_period(ticker):
     """
-    Prompt the user for a time period and download the data.
+    This function prompts the user to input an approximate period.
     """
-    period_regex = r"^\d*(d|mo|y|max)$"  # This regular expression filters for what yfinance expects
+    period_regex = r"^\d*(d|mo|y|max)$"
     while True:
-        period = input("Enter the period (e.g., '10y', '20y', 'max'): ")
+        period = input("Enter the period (e.g. XXd, XXmo, XXy, max): ")
         if re.match(period_regex, period):
-            prices = yf.download(ticker, period=period)  # downloads a dataframe
+            prices = yf.download(ticker, period=period)
             if not prices.empty:
                 return prices, period
-        print(Fore.RED + "Invalid period format or no data for the given period. Please try again." + Style.RESET_ALL)
+        print(Fore.RED + "Invalid period format. Here is an example: 10y" + Style.RESET_ALL)
+
+def get_specific_period(ticker):
+    """
+    This function prompts the user to input a specific date range.
+    """
+    date_regex = r"^\d{4}-\d{2}-\d{2} to \d{4}-\d{2}-\d{2}$"
+    while True:
+        date_range = input("Enter the period (e.g. yyyy-mm-dd to yyyy-mm-dd): ")
+        if re.match(date_regex, date_range):
+            start_date, end_date = date_range.split(" to ")
+            prices = yf.download(ticker, start=start_date, end=end_date)
+            if not prices.empty:
+                return prices, f"{start_date} to {end_date}"
+        print(Fore.RED + "Invalid date range format. Here is an example: 2021-01-01 to 2021-12-31" + Style.RESET_ALL)
+
+def get_valid_data(ticker):
+    """
+    This function prompts the user to choose between an approximate period or a specific period
+    and returns the downloaded stock data and the chosen period.
+    """
+    while True:
+        print("Would you like to get metrics using an approximate period from now (1) or input a specific period (2)?")
+        choice = input("Enter 1 or 2: ")
+        if choice == '1':
+            return get_approximate_period(ticker)
+        elif choice == '2':
+            return get_specific_period(ticker)
+        print(Fore.RED + "Invalid choice. Please enter 1 or 2." + Style.RESET_ALL)
 
 def fetch_stock_data(prices):
     """
@@ -40,18 +70,16 @@ def fetch_stock_data(prices):
     """
     while True:
         choice = input("Choose 1 for price returns or 2 for total returns: ")
-
+        #Return price returns (Close prices), which does not include dividends
         if choice == '1':
-            # Return price returns (Close prices), which does not include dividends
             close_prices = prices['Close']
             break
+        # Return total returns (Adjusted Close prices), automatically includes dividends
         elif choice == '2':
-            # Return total returns (Adjusted Close prices), automatically includes dividends
             close_prices = prices['Adj Close']
             break
         else:
             print(Fore.RED + "Invalid choice, please enter 1 or 2." + Style.RESET_ALL)
-    
     return close_prices
 
 def calculate_total_return(prices):
@@ -71,26 +99,15 @@ def get_daily_returns(prices):
     return r
 
 def standard_deviation(r):
-    """
-    Calculate the standard deviation of returns.
-    """
     return r.std(ddof=0)
 
 def skewness(r):
-    """
-    Computes the skewness of the supplied series or DataFrame.
-    Returns a float or a series.
-    """
     deviations_returns = r - r.mean()
     std_returns = r.std(ddof=0)
     cubed_deviations = (deviations_returns ** 3).mean()
     return cubed_deviations / (std_returns ** 3)
 
 def kurtosis(r):
-    """
-    Computes the kurtosis of the series or DataFrame.
-    Returns a float or series.
-    """
     deviations_returns = r - r.mean()
     std_returns = r.std(ddof=0)
     exp4_deviations = (deviations_returns ** 4).mean()
@@ -103,8 +120,6 @@ def get_level():
     """
     while True:
         choice = input("Input a level of confidence for VaRs measurements (99, 95 ...): ")
-
-        # Check if the choice is an integer
         if choice.isdigit():
             level = 100 - int(choice)
             return level
@@ -113,26 +128,16 @@ def get_level():
 
 def var_historic(r, level):
     """
-    Calculate Historic VaR.
+    This function calculates the historical Value at Risk (VaR) at the given confidence level.
     """
-    if isinstance(r, pd.DataFrame):  # if it is a dataframe, call the function on every column
-        return r.aggregate(var_historic, level=level)
-    elif isinstance(r, pd.Series):
-        return -np.percentile(r, level)
-    else:
-        raise TypeError("Expected r to be series or DataFrame")
+    return -np.percentile(r, level)
 
 def cvar_historic(r, level):
     """
-    Calculate Historic CVaR, aka beyond VaR.
+    This function calculates the Conditional Value at Risk (CVaR) at the given confidence level.
     """
-    if isinstance(r, pd.Series):
-        is_beyond = r <= -var_historic(r, level=level)
-        return -r[is_beyond].mean()
-    elif isinstance(r, pd.DataFrame):  # if it is a dataframe, call the function on every column
-        return r.aggregate(cvar_historic, level=level)
-    else:
-        raise TypeError("Expected r to be series or DataFrame")
+    is_beyond = r <= -var_historic(r, level=level)
+    return -r[is_beyond].mean()
 
 def var_cornishfisher(r, level):
     """
@@ -148,7 +153,7 @@ def var_cornishfisher(r, level):
          )
     return -(r.mean() + z * r.std(ddof=0))
 
-def drawdown(prices: pd.Series):
+def get_max_drawdown(prices: pd.Series):
     """
     Takes a time series of asset prices.
     Returns the maximum drawdown and its date.
@@ -169,41 +174,33 @@ def drawdown(prices: pd.Series):
     max_drawdown_date = drawdowns.idxmin()
     
     return max_drawdown, max_drawdown_date
+def annualize_vol(r, periods_per_year):
+    # Annualizes the volatility (standard deviation) of returns.
+    return r.std() * (periods_per_year ** 0.5)
 
-def get_annualized_rets_vol(r):
-    """
-    Calculate the annualized returns and volatility.
-    Assumes r is the daily return percentage.
-    """
-    daily_return_mean = r.mean() / 100  # Convert percentage to decimal
-    annualized_returns = ((1 + daily_return_mean) ** 252 - 1)*100 # 252 trading days, * 100 because its printed later as a percentage
-    annualized_vol = (standard_deviation(r) / 100 * np.sqrt(252))*100  # Convert percentage to decimal, annualize, * 100 for a fair comparison to annualized returns
-    return annualized_returns, annualized_vol
+def annualize_rets(r, periods_per_year):
+    # Annualizes the returns from daily returns, assuming compounding.
+    compounded_growth = (1 + r / 100).prod()
+    n_periods = r.shape[0]
+    return (compounded_growth ** (periods_per_year / n_periods) - 1) * 100
 
-def get_return_vol_ratio(annualized_returns, annualized_vol):
-    """
-    Calculate the return to volatility ratio (Sharpe Ratio without risk-free rate).
-    """
-    return annualized_returns / annualized_vol
+def sharpe_ratio(r, riskfree_rate, periods_per_year):
+    # Calculates the Sharpe Ratio, adjusting for the risk-free rate.
+    rf_per_period = ((1 + riskfree_rate / 100) ** (1 / periods_per_year) - 1) * 100
+    excess_ret = r - rf_per_period
+    ann_ex_ret = annualize_rets(excess_ret, periods_per_year)
+    ann_vol = annualize_vol(r, periods_per_year)
+    return ann_ex_ret / ann_vol
 
 def get_annual_risk_free_rate():
-    """
-    This function downloads the data for ^IRX, calculates the average value,
-    and returns it as the annual risk-free rate.
-    """
+    # Retrieves and annualizes the risk-free rate from the 13-week T-bill index.
     ticker = '^IRX'
     period = '10y'
     prices = yf.download(ticker, period=period)
     average_rate = prices['Close'].mean()
-    annual_risk_free_rate = average_rate * 252 / 100  # Convert to annual percentage
+    annual_risk_free_rate = average_rate * 252 / 100
     return annual_risk_free_rate
 
-def get_excess_returns(annualized_return, annual_risk_free_rate):
-    excess_returns = annualized_return - annual_risk_free_rate
-    return excess_returns
-
-def get_sharpe_ratio(excess_return, annualized_vol):
-    return excess_return / annualized_vol
 
 def main():
     init()
@@ -224,22 +221,24 @@ def main():
     var_hist = var_historic(daily_returns, level)
     cvar_hist = cvar_historic(daily_returns, level)
     var_cornish = var_cornishfisher(daily_returns, level)
-    max_drawdown, drawdown_date = drawdown(close_prices)
+    max_drawdown, drawdown_date = get_max_drawdown(close_prices)
 
-    annualized_returns, annualized_vol = get_annualized_rets_vol (daily_returns)
-    returns_vol_ratio = get_return_vol_ratio(annualized_returns, annualized_vol)
+    periods_per_year = 252
+    annualized_returns = annualize_rets(daily_returns, periods_per_year)
+    annualized_vol = annualize_vol(daily_returns, periods_per_year)
+    returns_vol_ratio = annualized_returns / annualized_vol
 
     annual_risk_free_rate = get_annual_risk_free_rate()
-    excess_returns = get_excess_returns(annualized_returns, annual_risk_free_rate)
-    sharpe_ratio = get_sharpe_ratio (excess_returns, annualized_vol)
+    excess_returns = annualized_returns - annual_risk_free_rate
+    sharpe = sharpe_ratio(daily_returns, annual_risk_free_rate, periods_per_year)
     
     print(f"\nThe data used started in: {start_date} up to {end_date}")
     print(f"Total Returns: {total_return:.4f}%")
     print(f"Average Annual Returns: {annualized_returns:.4f}%")
     print(f"Return to Volatility Ratio: {returns_vol_ratio:.4f}")
     print(f"Average Annual Risk-Free Rate: {annual_risk_free_rate:.4f}%")
-    print(f"Annual Excess returns: {excess_returns:.4f}%")
-    print(f"Sharpe Ratio: {sharpe_ratio:.4f}")
+    print(f"Annual Excess Returns: {excess_returns:.4f}%")
+    print(f"Sharpe Ratio: {sharpe:.4f}")
     print("")
     print(f"Volatility: {volatility:.4f}%")
     print(f"Historic VaR: {var_hist:.4f}%")
